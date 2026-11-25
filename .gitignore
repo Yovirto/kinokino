@@ -1,0 +1,13 @@
+# Buildozer and Python artifacts
+.buildozer/
+bin/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Editors and OS files
+.idea/
+.vscode/
+.DS_Store

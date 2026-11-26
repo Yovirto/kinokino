@@ -77,12 +77,7 @@ public final class MirrorController {
 
         GradientDrawable background = new GradientDrawable();
         background.setColor(BUTTON_COLOR);
-        background.setCornerRadii(new float[]{
-                dp(activity, 22),
-                dp(activity, 22),
-                dp(activity, 22),
-                dp(activity, 22)
-        });
+        background.setCornerRadius(dp(activity, 22));
         button.setBackground(background);
 
         button.setOnClickListener(new View.OnClickListener() {

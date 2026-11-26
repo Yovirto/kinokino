@@ -61,6 +61,8 @@ public final class MirrorController {
             return;
         }
 
+        KinopoiskCleaner.apply(activity, webView);
+
         final Button button = new Button(activity);
         button.setText("Смотреть");
         button.setTextColor(TEXT_COLOR);

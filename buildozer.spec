@@ -5,8 +5,9 @@ package.name = kinokino
 package.domain = org.kinokino
 
 source.dir = .
-source.include_exts = py
-source.exclude_dirs = tests,.github,.buildozer,bin,__pycache__,templates
+source.include_exts = py,html
+source.include_patterns = templates/*
+source.exclude_dirs = tests,.github,.buildozer,bin,__pycache__
 
 requirements = python3,flask,requests
 
@@ -23,9 +24,6 @@ android.api = 36
 android.ndk = 29
 android.archs = arm64-v8a,armeabi-v7a
 android.accept_sdk_license = True
-
-# Local HTML/CSS/JS interface served by Flask.
-android.add_assets = templates:templates
 
 # Use python-for-android's WebView bootstrap instead of the Kivy/SDL one.
 p4a.fork = kivy

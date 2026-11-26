@@ -8,29 +8,32 @@ class RouteTests(unittest.TestCase):
         app.config.update(TESTING=True)
         self.client = app.test_client()
 
-    def test_index_redirects_to_kinopoisk(self):
+    def test_index_serves_custom_interface(self):
         response = self.client.get("/")
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.headers["Location"], "https://www.kinopoisk.ru/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("KinoKino", response.get_data(as_text=True))
 
-    def test_mirror_redirects_to_kinokino(self):
+    def test_api_search_returns_results(self):
         response = self.client.get(
-            "/mirror",
-            query_string={"url": "https://www.kinopoisk.ru/film/464963/"},
-        )
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(
-            response.headers["Location"],
-            "https://www.kinokino.win/film/464963/",
-        )
-
-    def test_mirror_rejects_an_unsupported_page(self):
-        response = self.client.get(
-            "/mirror",
-            query_string={"url": "https://www.kinopoisk.ru/"},
+            "/api/search",
+            query_string={"q": "Inception"},
         )
         self.assertEqual(response.status_code, 200)
-        self.assertIn("Эта ссылка не подходит", response.get_data(as_text=True))
+        data = response.get_json()
+        self.assertIn("results", data)
+
+    def test_api_search_empty_query(self):
+        response = self.client.get("/api/search", query_string={"q": ""})
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["results"], [])
+
+    def test_api_film_endpoint(self):
+        response = self.client.get("/api/film/464963")
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["id"], 464963)
+        self.assertIn("kinokino.win", data["mirror_url"])
 
     def test_health_endpoint(self):
         response = self.client.get("/health")

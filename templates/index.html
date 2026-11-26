@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KinoKino</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: #111; color: #eee; font: 16px/1.5 system-ui, -apple-system, sans-serif; }
+    header { padding: 12px 16px; background: #1a1a1a; border-bottom: 1px solid #2a2a2a; position: sticky; top: 0; z-index: 10; }
+    h1 { margin: 0; font-size: 18px; letter-spacing: 0.5px; }
+    #search { width: 100%; max-width: 420px; padding: 10px 14px; border-radius: 24px; border: 1px solid #333; background: #0a0a0a; color: #eee; font-size: 16px; margin: 16px auto; display: block; outline: none; }
+    #search::placeholder { color: #888; }
+    #results { max-width: 800px; margin: 0 auto 40px; padding: 0 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 16px; }
+    .card { background: #161616; border: 1px solid #222; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; height: 240px; position: relative; }
+    .poster { width: 100%; height: 160px; object-fit: cover; background: #222; display: block; }
+    .poster:not([src]) { background: linear-gradient(135deg, #222 0%, #1a1a1a 100%); }
+    .card-body { padding: 10px 12px 12px; flex: 1; display: flex; flex-direction: column; }
+    .title { font-size: 15px; font-weight: 600; margin: 0 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .meta { font-size: 12px; color: #aaa; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .watch { margin-top: auto; width: 100%; padding: 8px 0; border-top: 1px solid #222; background: #0d0d0d; color: #ff3b30; font-weight: 700; font-size: 13px; text-align: center; text-decoration: none; border: none; cursor: pointer; }
+    .watch:hover { opacity: 0.9; }
+    .empty { text-align: center; padding: 40px 16px; color: #888; }
+    .hint { margin: 0 auto 24px; max-width: 420px; color: #aaa; font-size: 13px; text-align: center; }
+    .loading, .error { text-align: center; padding: 24px 16px; color: #888; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>KinoKino</h1>
+  </header>
+
+  <input id="search" type="search" placeholder="Поиск фильмов и сериалов..." autocomplete="off">
+  <p class="hint">Открыто через публичный поиск Кинопоиска без ключа API</p>
+
+  <div id="results" class="empty">Введите название фильма или сериала</div>
+
+  <template id="card-template">
+    <article class="card">
+      <img class="poster" loading="lazy" alt="">
+      <div class="card-body">
+        <h2 class="title"></h2>
+        <p class="meta"></p>
+      </div>
+      <button class="watch" type="button">Смотреть</button>
+    </article>
+  </template>
+
+  <script>
+    (function () {
+      const searchInput = document.getElementById("search");
+      const resultsContainer = document.getElementById("results");
+      const cardTemplate = document.getElementById("card-template");
+      let debounceTimer = null;
+
+      function escapeHtml(text) {
+        const div = document.createElement("div");
+        div.textContent = text === null || text === undefined ? "" : text;
+        return div.innerHTML;
+      }
+
+      function render(results) {
+        resultsContainer.innerHTML = "";
+        if (!results || results.length === 0) {
+          resultsContainer.innerHTML = '<div class="empty">Ничего не найдено</div>';
+          return;
+        }
+
+        for (const item of results) {
+          const card = cardTemplate.content.cloneNode(true);
+          const img = card.querySelector(".poster");
+          if (item.poster) {
+            img.src = item.poster;
+            img.alt = escapeHtml(item.title);
+          } else {
+            img.alt = "Постер недоступен";
+          }
+          card.querySelector(".title").textContent = item.title || "Без названия";
+          const parts = [];
+          if (item.year) parts.push(item.year);
+          if (item.rating != null) parts.push("⭐ " + item.rating.toFixed(1));
+          card.querySelector(".meta").textContent = parts.join("  ·  ") || "";
+
+          const watchBtn = card.querySelector(".watch");
+          watchBtn.addEventListener("click", function () {
+            const url = item.url || ("https://www.kinopoisk.ru/film/" + item.id + "/");
+            const mirrorUrl = url
+              .replace(/^https?:\/\/(www\.)?kinopoisk\.ru\//, "https://www.kinokino.win/")
+              .replace(/\/$/, "");
+            window.location.href = mirrorUrl + "/";
+          });
+
+          resultsContainer.appendChild(card);
+        }
+      }
+
+      function showLoading() {
+        resultsContainer.innerHTML = '<div class="loading">Идёт поиск...</div>';
+      }
+
+      function showError() {
+        resultsContainer.innerHTML = '<div class="error">Ошибка поиска. Попробуйте ещё раз.</div>';
+      }
+
+      async function doSearch(query) {
+        if (!query || query.length < 2) {
+          resultsContainer.innerHTML = '<div class="empty">Введите название фильма или сериала</div>';
+          return;
+        }
+
+        showLoading();
+
+        try {
+          const response = await fetch("/api/search?q=" + encodeURIComponent(query) + "&limit=30");
+          if (!response.ok) throw new Error("search failed");
+          const data = await response.json();
+          render(data.results || []);
+        } catch (error) {
+          console.error(error);
+          showError();
+        }
+      }
+
+      searchInput.addEventListener("input", function () {
+        clearTimeout(debounceTimer);
+        const query = this.value.trim();
+        debounceTimer = setTimeout(function () {
+          doSearch(query);
+        }, 300);
+      });
+
+      searchInput.addEventListener("keypress", function (event) {
+        if (event.key === "Enter") {
+          clearTimeout(debounceTimer);
+          doSearch(this.value.trim());
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

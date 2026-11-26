@@ -28,6 +28,24 @@ class SuggestItemTests(unittest.TestCase):
         self.assertEqual(item["poster"], "https://cdn.example.com/poster.jpg")
         self.assertEqual(item["url"], "https://www.kinopoisk.ru/film/464963/")
 
+    def test_clean_item_converts_current_yandex_cdn_url(self):
+        item = _clean_item(
+            {
+                "id": 447301,
+                "gallery": {
+                    "posters": {
+                        "kpVertical": {
+                            "avatarsUrl": "//cdn.example.svc.cdn.yandex.net/get-kinopoisk-image/1/poster"
+                        }
+                    }
+                },
+            }
+        )
+        self.assertEqual(
+            item["poster"],
+            "https://avatars.mds.yandex.net/get-kinopoisk-image/1/poster/orig",
+        )
+
     def test_clean_item_missing_fields(self):
         item = _clean_item({"id": 1})
         self.assertEqual(item["title"], "")

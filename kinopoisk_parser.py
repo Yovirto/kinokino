@@ -11,9 +11,9 @@ rating, year and poster URL.
 
 from __future__ import annotations
 
-import json
 import re
 from typing import Any
+from urllib.parse import urlparse, urlunparse
 
 import requests
 
@@ -33,20 +33,46 @@ REQUEST_HEADERS = {
 _SESSION = requests.Session()
 
 
+def _image_url(value: Any) -> str | None:
+    """Return an image URL that can be loaded by Android WebView."""
+    if not isinstance(value, str) or not value:
+        return None
+
+    url = "https:" + value if value.startswith("//") else value
+    parsed = urlparse(url)
+    if parsed.hostname and parsed.hostname.endswith(".svc.cdn.yandex.net"):
+        path = parsed.path.rstrip("/")
+        if not path.endswith("/orig"):
+            path += "/orig"
+        url = urlunparse(
+            (
+                parsed.scheme,
+                "avatars.mds.yandex.net",
+                path,
+                parsed.params,
+                parsed.query,
+                parsed.fragment,
+            )
+        )
+    return url
+
+
 def _poster_url(item: dict[str, Any]) -> str | None:
     """Return an absolute poster URL or ``None``."""
-
     gallery = item.get("gallery") or {}
     posters = gallery.get("posters") or {}
     vertical = posters.get("kpVertical") or {}
-    url = vertical.get("avatarsUrl")
+    url = _image_url(vertical.get("avatarsUrl"))
     if url:
-        return "https:" + url if url.startswith("//") else url
+        return url
+    url = _image_url(vertical.get("fallbackUrl"))
+    if url:
+        return url
     hd = posters.get("hdVertical") or {}
-    url = hd.get("avatarsUrl")
+    url = _image_url(hd.get("avatarsUrl"))
     if url:
-        return "https:" + url if url.startswith("//") else url
-    return None
+        return url
+    return _image_url(hd.get("fallbackUrl"))
 
 
 def _title(item: dict[str, Any]) -> tuple[str | None, str | None]:

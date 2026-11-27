@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>KinoKino — просмотр</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: #111; color: #eee; font: 16px/1.5 system-ui, -apple-system, sans-serif; }
+    header { padding: 10px 14px; background: #1a1a1a; border-bottom: 1px solid #2a2a2a; display: flex; align-items: center; gap: 12px; }
+    .back { background: #262626; border: 1px solid #3a3a3a; color: #eee; border-radius: 20px; padding: 6px 16px; font-size: 14px; text-decoration: none; }
+    h1 { margin: 0; font-size: 17px; font-weight: 600; flex: 1; }
+    main { max-width: 980px; margin: 0 auto; padding: 16px; }
+    #video { width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 8px; }
+    .bar { display: flex; gap: 10px; margin: 14px 0; flex-wrap: wrap; align-items: center; }
+    .bar label { font-size: 14px; color: #aaa; }
+    select { background: #1a1a1a; color: #eee; border: 1px solid #3a3a3a; border-radius: 8px; padding: 8px 12px; font-size: 15px; max-width: 100%; }
+    .status { font-size: 13px; color: #888; min-height: 20px; }
+    .status.error { color: #ff6b5e; }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="back" href="/">← Назад</a>
+    <h1>Просмотр</h1>
+  </header>
+
+  <main>
+    <video id="video" controls playsinline preload="metadata"></video>
+
+    <div class="bar">
+      <label for="translation">Озвучка:</label>
+      <select id="translation" disabled><option>Загрузка…</option></select>
+      <label for="quality">Качество:</label>
+      <select id="quality" disabled><option>Авто</option></select>
+      <span id="status" class="status">Инициализация…</span>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+  <script>
+    (function () {
+      const video = document.getElementById("video");
+      const translationSelect = document.getElementById("translation");
+      const qualitySelect = document.getElementById("quality");
+      const statusEl = document.getElementById("status");
+      const filmId = {{ film_id }};
+
+      let hls = null;
+      let currentManifest = null;
+      let resumeTime = 0;
+
+      function setStatus(text, isError) {
+        statusEl.textContent = text;
+        statusEl.className = isError ? "status error" : "status";
+      }
+
+      function destroyHls() {
+        if (hls) {
+          hls.destroy();
+          hls = null;
+        }
+      }
+
+      function playManifest(manifestUrl) {
+        destroyHls();
+        resumeTime = video.currentTime || resumeTime;
+
+        if (!window.Hls || !Hls.isSupported()) {
+          // Native HLS (Safari / some WebViews)
+          video.src = manifestUrl;
+          setStatus("Воспроизведение через встроенный плеер устройства");
+          return;
+        }
+
+        hls = new Hls({
+          // Long VOD playlists: raise defaults slightly
+          maxBufferLength: 30,
+          maxMaxBufferLength: 60,
+        });
+
+        hls.on(Hls.Events.MANIFEST_PARSED, function (_event, data) {
+          // Populate quality selector
+          qualitySelect.innerHTML = '<option value="-1">Авто</option>';
+          (data.levels || []).forEach(function (level, index) {
+            const label = level.height ? level.height + "p" : Math.round(level.bitrate / 1000) + " kbps";
+            const opt = document.createElement("option");
+            opt.value = String(index);
+            opt.textContent = label;
+            qualitySelect.appendChild(opt);
+          });
+          qualitySelect.disabled = qualitySelect.options.length <= 2;
+        });
+
+        hls.on(Hls.Events.ERROR, function (_event, data) {
+          if (data.fatal) {
+            setStatus("Ошибка воспроизведения: " + (data.details || "неизвестная"), true);
+          }
+        });
+
+        hls.loadSource(manifestUrl);
+        hls.attachMedia(video);
+        currentManifest = manifestUrl;
+        setStatus("Загрузка потока…");
+
+        video.addEventListener("loadedmetadata", function once() {
+          video.removeEventListener("loadedmetadata", once);
+          if (resumeTime > 0 && resumeTime < (video.duration || Infinity)) {
+            video.currentTime = resumeTime;
+          }
+        }, { once: false });
+      }
+
+      async function loadStreams() {
+        setStatus("Получение списка озвучек…");
+        try {
+          const response = await fetch(`/api/film/${filmId}/streams`);
+          if (!response.ok) throw new Error("api failed");
+          const data = await response.json();
+          const streams = data.results || [];
+          if (streams.length === 0) {
+            setStatus("Доступные источники не найдены", true);
+            translationSelect.innerHTML = '<option>—</option>';
+            return;
+          }
+
+          translationSelect.innerHTML = "";
+          streams.forEach(function (item, index) {
+            const opt = document.createElement("option");
+            const parts = [];
+            if (item.provider) parts.push(item.provider);
+            if (item.quality) parts.push(item.quality);
+            opt.value = String(index);
+            opt.textContent = item.name + (parts.length ? " · " + parts.join(" · ") : "");
+            opt.dataset.manifest = item.manifest_url;
+            translationSelect.appendChild(opt);
+          });
+          translationSelect.disabled = false;
+          setStatus("Готово. Выберите озвучку.");
+          playManifest(streams[0].manifest_url);
+        } catch (err) {
+          setStatus("Не удалось получить источники", true);
+        }
+      }
+
+      translationSelect.addEventListener("change", function () {
+        const url = this.selectedOptions[0] && this.selectedOptions[0].dataset.manifest;
+        if (url) playManifest(url);
+      });
+
+      qualitySelect.addEventListener("change", function () {
+        if (!hls) return;
+        const value = parseInt(this.value, 10);
+        hls.currentLevel = isNaN(value) ? -1 : value;
+      });
+
+      loadStreams();
+    })();
+  </script>
+</body>
+</html>

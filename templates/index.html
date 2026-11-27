@@ -83,11 +83,7 @@
 
           const watchBtn = card.querySelector(".watch");
           watchBtn.addEventListener("click", function () {
-            const url = item.url || ("https://www.kinopoisk.ru/film/" + item.id + "/");
-            const mirrorUrl = url
-              .replace(/^https?:\/\/(www\.)?kinopoisk\.ru\//, "https://www.kinokino.win/")
-              .replace(/\/$/, "");
-            window.location.href = mirrorUrl + "/";
+            window.location.href = "/watch/" + item.id;
           });
 
           resultsContainer.appendChild(card);

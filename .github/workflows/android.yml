@@ -8,12 +8,14 @@ on:
     paths:
       - "**/*.py"
       - "**/*.java"
+      - "templates/**"
       - "buildozer.spec"
       - ".github/workflows/android.yml"
   pull_request:
     paths:
       - "**/*.py"
       - "**/*.java"
+      - "templates/**"
       - "buildozer.spec"
       - ".github/workflows/android.yml"
 
